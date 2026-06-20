@@ -78,4 +78,17 @@ void lcd_fill(uint16_t);
  * @brief Sets the screen to a solid color through DMA
  * @param color A 16 bit value to set the color of the screen
  */
-void lcd_fill_dma(uint16_t);
+void lcd_DMA_fill(uint16_t);
+
+/***
+ * 
+ */
+void lcd_dma_fill_row(uint16_t);
+
+
+/***
+ * 
+ */
+void lcd_DMA_init(void);
+
+uint16_t endian_swap(uint16_t);

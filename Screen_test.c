@@ -3,6 +3,9 @@
 #include "hardware/spi.h"
 #include "hardware/dma.h"
 
+// Global variable for DMA identifier
+static int DMA_id;
+
 int main()
 {
     stdio_init_all();
@@ -31,13 +34,15 @@ int main()
 
     lcd_fill(0xFF00);
 
+    // Initialize DMA
+    lcd_DMA_init();
+
+    uint16_t color = 0x0000;
+
     while (true){
-        lcd_fill(0x1000);
-        sleep_ms(1000);
-        lcd_fill(0x0100);
-        sleep_ms(1000);
-        lcd_fill(0x0010);
-        sleep_ms(1000);
+        lcd_DMA_fill(color);
+        sleep_ms(10);
+        color = (color + 10 < color)? 0x0000 : color + 10;
     }
 }
 
@@ -129,6 +134,69 @@ void lcd_fill(uint16_t color){
     gpio_put(CS, 1);
 }
 
-void lcd_fill_dma(uint16_t color){
+void lcd_DMA_fill(uint16_t color){
+    // Select column
+    lcd_send_command(0x2A);
+    lcd_send_data((uint8_t[]){0x00, 0x00, ((WIDTH-1) >> 8) & 0xFF, (WIDTH-1) & 0xFF}, 4);
     
+    // Select row
+    lcd_send_command(0x2B);
+    lcd_send_data((uint8_t[]){0x00, 0x00, ((HEIGHT-1) >> 8) & 0xFF, (HEIGHT-1) & 0xFF}, 4);
+    
+    // Get in a state thats ready to accept data
+    lcd_send_command(0x2C);
+    
+    // Tell SPI to expect data
+    gpio_put(CS, 0);
+    gpio_put(DC, 1);
+
+    // Go through and fire off every row
+    for (int i = 0 ; i < HEIGHT; i++){
+        lcd_dma_fill_row(color);
+    }
+
+    gpio_put(CS, 1);
+}
+
+void lcd_dma_fill_row(uint16_t color){
+    uint16_t DMA_BUFFER[WIDTH];
+
+    uint16_t swapped_endian_color = endian_swap(color);
+
+    for (int i = 0 ; i < WIDTH; i ++){
+        DMA_BUFFER[i] = swapped_endian_color;
+    }
+
+    // Fire off from DMA
+    dma_channel_transfer_from_buffer_now(DMA_id, DMA_BUFFER, dma_encode_transfer_count(2 * WIDTH));
+    dma_channel_wait_for_finish_blocking(DMA_id);
+}
+
+void lcd_DMA_init(void){
+    DMA_id = dma_claim_unused_channel(true);
+
+    // Configure the DMA channel
+    dma_channel_config_t config_dma = dma_channel_get_default_config(DMA_id);
+
+    // Update the config and ensure certain default behaviours
+    channel_config_set_transfer_data_size(&config_dma, DMA_SIZE_8);
+    channel_config_set_write_increment(&config_dma, false);
+    channel_config_set_dreq(&config_dma, spi_get_dreq(SPI_PORT, true));
+
+    // Cant believe you forgot this
+    dma_channel_set_write_addr(DMA_id, &spi_get_hw(SPI_PORT)->dr, false);
+
+    // Update the DMA channel to use specified config settings
+    dma_channel_set_config(DMA_id, &config_dma, false);
+}
+
+uint16_t endian_swap(uint16_t num){
+    // Split into upper and lower btyes
+    uint16_t upper = 0xFF00 & num;
+    uint16_t lower = 0x00FF & num;
+
+    upper = upper >> 8;
+    lower = lower << 8;
+
+    return upper | lower;
 }
