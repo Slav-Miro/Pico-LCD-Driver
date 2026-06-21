@@ -81,13 +81,14 @@ void lcd_fill(uint16_t);
 void lcd_DMA_fill(uint16_t);
 
 /***
- * 
+ * @brief Updates a row's color buffer for a row. Passes sirectly to DMA rather than letting CPU handle memory writing.
+ * @param A 16 bit integer representing s color to fill the array with. Endian"ness" is handled.
  */
 void lcd_dma_fill_row(uint16_t);
 
 
 /***
- * 
+ * @brief Initialize DMA for the screen to use per row rather thsn letting the CPU handle array operations. 
  */
 void lcd_DMA_init(void);
 
